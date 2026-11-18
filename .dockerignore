@@ -1,0 +1,12 @@
+.git
+.github
+**/bin
+**/obj
+**/.vs
+**/TestResults
+README.md
+AGENTS.md
+docs
+infra
+tests
+samples

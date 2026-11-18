@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <link rel="icon" href="data:,">
+  <title>Simple MCP Client</title>
+  <link rel="stylesheet" href="/styles.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <div class="shell">
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="Simple MCP Client home">
+        <span class="brand-mark" aria-hidden="true">M</span>
+        <span>Simple<span class="brand-light">MCP</span></span>
+      </a>
+      <div class="top-actions">
+        <span class="privacy"><span class="privacy-dot"></span> In-memory session</span>
+        <button id="theme-toggle" class="icon-button" type="button" aria-label="Toggle color theme">◐</button>
+      </div>
+    </header>
+
+    <main>
+      <section class="hero">
+        <div>
+          <div class="eyebrow"><span class="eyebrow-line"></span> MODEL CONTEXT PROTOCOL</div>
+          <h1>Meet your MCP<br><span>servers.</span></h1>
+          <p class="hero-copy">A clear, focused workspace to explore tools, resources, and prompts from any MCP server.</p>
+        </div>
+        <div class="hero-art" aria-hidden="true">
+          <div class="orbit orbit-one"></div>
+          <div class="orbit orbit-two"></div>
+          <div class="orbit orbit-three"></div>
+          <div class="orbit-center">M</div>
+          <i class="node node-one"></i><i class="node node-two"></i><i class="node node-three"></i>
+        </div>
+      </section>
+
+      <section class="connect-card" aria-labelledby="connect-heading">
+        <div class="connect-heading">
+          <div class="step-number">01</div>
+          <div>
+            <h2 id="connect-heading">Connect to a server</h2>
+            <p>Your credentials are only used for this request and never stored.</p>
+          </div>
+          <span id="connection-state" class="state-badge">NOT CONNECTED</span>
+        </div>
+        <form id="connect-form" class="connect-form">
+          <label class="token-field">
+            <span>APP ACCESS TOKEN <small>DEPLOYMENT</small></span>
+            <input id="web-auth-token" type="password" placeholder="Required for hosted deployments" autocomplete="off">
+          </label>
+          <label class="endpoint-field">
+            <span>SERVER ENDPOINT</span>
+            <div class="input-wrap">
+              <span class="input-prefix" aria-hidden="true">↗</span>
+              <input id="endpoint" type="url" required value="http://localhost:5005/mcp" placeholder="https://your-server.example/mcp" autocomplete="url">
+            </div>
+          </label>
+          <label class="token-field">
+            <span>BEARER TOKEN <small>OPTIONAL</small></span>
+            <input id="token" type="password" placeholder="Paste an access token" autocomplete="off">
+          </label>
+          <button id="connect-button" class="primary-button" type="submit">
+            <span>Connect</span><span aria-hidden="true">→</span>
+          </button>
+        </form>
+        <div id="notice" class="notice" role="status" aria-live="polite"></div>
+      </section>
+
+      <section id="workspace" class="workspace hidden" aria-label="MCP server workspace">
+        <div class="workspace-heading">
+          <div>
+            <div class="eyebrow"><span class="eyebrow-line"></span> SERVER EXPLORER</div>
+            <h2>What would you like to explore?</h2>
+          </div>
+          <button id="disconnect-button" class="quiet-button" type="button">Disconnect</button>
+        </div>
+
+        <div class="tab-bar" role="tablist" aria-label="Server capabilities">
+          <button class="tab active" id="tools-tab" type="button" role="tab" aria-selected="true" data-view="tools">
+            <span class="tab-icon">⌘</span> Tools <span id="tools-count" class="count">0</span>
+          </button>
+          <button class="tab" id="resources-tab" type="button" role="tab" aria-selected="false" data-view="resources">
+            <span class="tab-icon">▤</span> Resources <span id="resources-count" class="count">0</span>
+          </button>
+          <button class="tab" id="prompts-tab" type="button" role="tab" aria-selected="false" data-view="prompts">
+            <span class="tab-icon">✳</span> Prompts <span id="prompts-count" class="count">0</span>
+          </button>
+        </div>
+
+        <div class="explorer-card">
+          <div class="explorer-toolbar">
+            <label class="search-wrap">
+              <span aria-hidden="true">⌕</span>
+              <input id="search" type="search" placeholder="Search capabilities..." aria-label="Search capabilities">
+            </label>
+            <span id="result-summary" class="result-summary"></span>
+          </div>
+          <div id="tools-view" class="view-panel" role="tabpanel" aria-labelledby="tools-tab">
+            <div class="table-wrap">
+              <table>
+                <thead><tr>
+                  <th><button class="sort-button" data-sort="name" type="button">TOOL <span>↕</span></button></th>
+                  <th><button class="sort-button" data-sort="description" type="button">DESCRIPTION <span>↕</span></button></th>
+                  <th><span class="sr-only">Action</span></th>
+                </tr></thead>
+                <tbody id="tools-body"></tbody>
+              </table>
+            </div>
+            <div id="empty-tools" class="empty-state hidden">No tools match your search.</div>
+          </div>
+          <div id="resources-view" class="view-panel hidden" role="tabpanel" aria-labelledby="resources-tab">
+            <div id="resources-list" class="item-list"></div>
+            <div id="empty-resources" class="empty-state hidden">No resources match your search.</div>
+          </div>
+          <div id="prompts-view" class="view-panel hidden" role="tabpanel" aria-labelledby="prompts-tab">
+            <div id="prompts-list" class="item-list"></div>
+            <div id="empty-prompts" class="empty-state hidden">No prompts match your search.</div>
+          </div>
+          <div class="pagination">
+            <span id="page-label">Page 1 of 1</span>
+            <div class="page-actions">
+              <button id="previous-page" class="page-button" type="button" aria-label="Previous page">←</button>
+              <button id="next-page" class="page-button" type="button" aria-label="Next page">→</button>
+            </div>
+          </div>
+        </div>
+
+        <div id="action-panel" class="action-panel hidden">
+          <div class="action-copy">
+            <div class="eyebrow"><span class="eyebrow-line"></span> RUN A CAPABILITY</div>
+            <h3 id="action-title">Run a tool</h3>
+            <p id="action-description">Provide JSON arguments to run this capability.</p>
+          </div>
+          <div class="action-form">
+            <label for="arguments-input">ARGUMENTS <small>JSON OBJECT</small></label>
+            <textarea id="arguments-input" rows="4" spellcheck="false">{}</textarea>
+            <button id="execute-button" class="primary-button" type="button">Run <span aria-hidden="true">→</span></button>
+          </div>
+          <div id="output-panel" class="output-panel hidden" aria-live="polite">
+            <div class="output-heading">RESPONSE</div>
+            <pre id="output-content"></pre>
+          </div>
+        </div>
+      </section>
+
+      <footer>
+        <span>Simple MCP Client</span><span class="footer-divider">·</span><span>Open source, built for builders.</span>
+        <a href="https://modelcontextprotocol.io/" target="_blank" rel="noreferrer">MCP documentation ↗</a>
+      </footer>
+    </main>
+  </div>
+</body>
+</html>
