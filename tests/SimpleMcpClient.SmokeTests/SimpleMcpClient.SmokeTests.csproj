@@ -2,6 +2,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\SimpleMcpClient.Core\SimpleMcpClient.Core.csproj" />
+    <ProjectReference Include="..\..\samples\SimpleMcpClient.SampleServer\SimpleMcpClient.SampleServer.csproj" />
   </ItemGroup>
 
   <PropertyGroup>
