@@ -87,10 +87,20 @@ static async Task VerifyEndpointValidationAsync()
         McpEndpointValidator.ValidateAsync(new Uri("file:///etc/passwd"), allowPrivateNetwork: true, allowedHosts: null));
     await ExpectAsync<ArgumentException>(() =>
         McpEndpointValidator.ValidateAsync(new Uri("http://127.0.0.1:5005/mcp"), allowPrivateNetwork: false, allowedHosts: null));
+    await ExpectAsync<ArgumentException>(() =>
+        McpEndpointValidator.ValidateAsync(
+            new Uri("http://mcp.example.test/mcp"),
+            allowPrivateNetwork: false,
+            allowedHosts: "mcp.example.test"));
     await McpEndpointValidator.ValidateAsync(
         new Uri("https://mcp.example.test/mcp"),
         allowPrivateNetwork: false,
         allowedHosts: "mcp.example.test");
+    await ExpectAsync<ArgumentException>(() =>
+        McpClientSession.ConnectHttpAsync(
+            new Uri("http://127.0.0.1:5005/mcp"),
+            bearerToken: "token\r\nX-Injected: value",
+            allowPrivateNetwork: true));
 }
 
 static async Task<RunningSampleServer> StartServerAsync()

@@ -18,7 +18,7 @@ public static class SampleMcpProtocol
         {
             "initialize" => new JsonObject
             {
-                ["protocolVersion"] = "2025-11-25",
+                ["protocolVersion"] = request["params"]?["protocolVersion"]?.GetValue<string>() ?? "2026-07-28",
                 ["capabilities"] = new JsonObject
                 {
                     ["tools"] = new JsonObject { ["listChanged"] = false },
@@ -27,38 +27,7 @@ public static class SampleMcpProtocol
                 },
                 ["serverInfo"] = new JsonObject { ["name"] = "SimpleMcpClient sample", ["version"] = "1.0.0" }
             },
-            "tools/list" => new JsonObject
-            {
-                ["tools"] = new JsonArray
-                {
-                    new JsonObject
-                    {
-                        ["name"] = "echo",
-                        ["description"] = "Echo text back to the caller.",
-                        ["inputSchema"] = new JsonObject
-                        {
-                            ["type"] = "object",
-                            ["properties"] = new JsonObject { ["text"] = new JsonObject { ["type"] = "string" } },
-                            ["required"] = new JsonArray("text")
-                        }
-                    },
-                    new JsonObject
-                    {
-                        ["name"] = "add",
-                        ["description"] = "Add two numbers.",
-                        ["inputSchema"] = new JsonObject
-                        {
-                            ["type"] = "object",
-                            ["properties"] = new JsonObject
-                            {
-                                ["left"] = new JsonObject { ["type"] = "number" },
-                                ["right"] = new JsonObject { ["type"] = "number" }
-                            },
-                            ["required"] = new JsonArray("left", "right")
-                        }
-                    }
-                }
-            },
+            "tools/list" => ListTools(request["params"] as JsonObject),
             "tools/call" => CallTool(request["params"] as JsonObject),
             "resources/list" => new JsonObject
             {
@@ -115,6 +84,44 @@ public static class SampleMcpProtocol
         {
             ["content"] = new JsonArray(new JsonObject { ["type"] = "text", ["text"] = text }),
             ["isError"] = false
+        };
+    }
+
+    private static JsonObject ListTools(JsonObject? parameters)
+    {
+        var firstPage = parameters?["cursor"] is null;
+        var tool = firstPage
+            ? new JsonObject
+            {
+                ["name"] = "echo",
+                ["description"] = "Echo text back to the caller.",
+                ["inputSchema"] = new JsonObject
+                {
+                    ["type"] = "object",
+                    ["properties"] = new JsonObject { ["text"] = new JsonObject { ["type"] = "string" } },
+                    ["required"] = new JsonArray("text")
+                }
+            }
+            : new JsonObject
+            {
+                ["name"] = "add",
+                ["description"] = "Add two numbers.",
+                ["inputSchema"] = new JsonObject
+                {
+                    ["type"] = "object",
+                    ["properties"] = new JsonObject
+                    {
+                        ["left"] = new JsonObject { ["type"] = "number" },
+                        ["right"] = new JsonObject { ["type"] = "number" }
+                    },
+                    ["required"] = new JsonArray("left", "right")
+                }
+            };
+
+        return new JsonObject
+        {
+            ["tools"] = new JsonArray(tool),
+            ["nextCursor"] = firstPage ? "page-2" : null
         };
     }
 

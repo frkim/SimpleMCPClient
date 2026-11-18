@@ -13,7 +13,7 @@ Simple MCP Client
   simple-mcp-client prompt <endpoint> <prompt> [arguments-json]
   simple-mcp-client --stdio <command> [server-args...] -- <operation> [args...]
 
-Set MCP_AUTH_TOKEN to send an Authorization: ****** to an HTTP MCP server.
+Set MCP_AUTH_TOKEN to authenticate to an HTTP MCP server.
 """;
 
 try

@@ -1,9 +1,23 @@
 using SimpleMcpClient.Core;
+using System.Net.Http.Headers;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json.Nodes;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.WebHost.UseUrls("http://0.0.0.0:8080");
+builder.Logging.ClearProviders();
+builder.Logging.AddJsonConsole();
+if (!string.IsNullOrWhiteSpace(builder.Configuration["APPLICATIONINSIGHTS_CONNECTION_STRING"]))
+{
+    builder.Services.AddApplicationInsightsTelemetry();
+}
 var app = builder.Build();
+var webAuthToken = builder.Configuration["WEB_AUTH_TOKEN"];
+if (string.IsNullOrWhiteSpace(webAuthToken) && !app.Environment.IsDevelopment())
+{
+    throw new InvalidOperationException("WEB_AUTH_TOKEN must be configured outside development.");
+}
 
 app.Use(async (context, next) =>
 {
@@ -14,12 +28,25 @@ app.Use(async (context, next) =>
 
     try
     {
+        if (context.Request.Path.StartsWithSegments("/api")
+            && !string.IsNullOrWhiteSpace(webAuthToken)
+            && !HasValidWebAuthToken(context.Request, webAuthToken))
+        {
+            context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+            context.Response.Headers.WWWAuthenticate = "Bearer";
+            await context.Response.WriteAsJsonAsync(new { error = "Enter a valid app access token." });
+            return;
+        }
+
         await next();
     }
     catch (Exception exception)
     {
         var correlationId = context.TraceIdentifier;
-        app.Logger.LogError(exception, "Request failed with correlation id {CorrelationId}", correlationId);
+        app.Logger.LogError(
+            "Request failed with error type {ErrorType} and correlation id {CorrelationId}",
+            exception.GetType().Name,
+            correlationId);
         if (!context.Response.HasStarted)
         {
             context.Response.Clear();
@@ -93,6 +120,20 @@ app.MapPost("/api/prompts/get", async (McpRequest request, HttpContext context) 
 
 app.Run();
 
+static bool HasValidWebAuthToken(HttpRequest request, string expectedToken)
+{
+    if (!AuthenticationHeaderValue.TryParse(request.Headers.Authorization, out var authorization)
+        || !string.Equals(authorization.Scheme, "Bearer", StringComparison.OrdinalIgnoreCase)
+        || string.IsNullOrEmpty(authorization.Parameter))
+    {
+        return false;
+    }
+
+    return CryptographicOperations.FixedTimeEquals(
+        Encoding.UTF8.GetBytes(authorization.Parameter),
+        Encoding.UTF8.GetBytes(expectedToken));
+}
+
 async Task<McpClientSession> ConnectAsync(McpRequest request, CancellationToken cancellationToken)
 {
     if (!Uri.TryCreate(request.Endpoint, UriKind.Absolute, out var endpoint))
@@ -104,7 +145,7 @@ async Task<McpClientSession> ConnectAsync(McpRequest request, CancellationToken 
         endpoint,
         request.BearerToken,
         allowPrivateNetwork: app.Environment.IsDevelopment(),
-        allowedHosts: builder.Configuration["Mcp:AllowedHosts"],
+        allowedHosts: builder.Configuration["MCP_ALLOWED_HOSTS"],
         cancellationToken);
 }
 

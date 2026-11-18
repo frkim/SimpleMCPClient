@@ -1,0 +1,188 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: ci-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: true
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          global-json-file: global.json
+          cache: true
+          cache-dependency-path: '**/packages.lock.json'
+      - run: dotnet restore SimpleMcpClient.slnx --locked-mode
+      - run: dotnet format SimpleMcpClient.slnx --verify-no-changes --no-restore
+      - run: dotnet build SimpleMcpClient.slnx --configuration Release --no-restore -warnaserror
+      - run: dotnet run --project tests/SimpleMcpClient.SmokeTests/SimpleMcpClient.SmokeTests.csproj --configuration Release --no-build
+      - run: docker build --tag simplemcpclient:ci .
+      - run: az bicep install
+      - run: az bicep lint --file infra/resource-group.bicep
+      - run: az bicep lint --file infra/main.bicep
+      - run: az bicep build --file infra/resource-group.bicep --stdout > /dev/null
+      - run: az bicep build --file infra/main.bicep --stdout > /dev/null
+
+  deploy:
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
+    needs: build
+    environment: production
+    runs-on: ubuntu-latest
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
+    permissions:
+      contents: read
+    env:
+      RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+      AZURE_LOCATION: ${{ vars.AZURE_LOCATION }}
+      OWNER: ${{ vars.AZURE_OWNER }}
+      COST_CENTER: ${{ vars.AZURE_COST_CENTER }}
+      MCP_ALLOWED_HOSTS: ${{ vars.MCP_ALLOWED_HOSTS }}
+      WEB_AUTH_TOKEN: ${{ secrets.WEB_AUTH_TOKEN }}
+      IMAGE_TAG: ${{ github.sha }}
+      ENVIRONMENT_NAME: prod
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+      - name: Validate deployment configuration
+        run: |
+          for name in RESOURCE_GROUP AZURE_LOCATION OWNER COST_CENTER MCP_ALLOWED_HOSTS WEB_AUTH_TOKEN; do
+            if [ -z "${!name}" ]; then
+              echo "::error::$name must be configured for deployment."
+              exit 1
+            fi
+          done
+      - name: Validate and preview the resource group
+        run: |
+          az deployment sub validate \
+            --location "$AZURE_LOCATION" \
+            --template-file infra/resource-group.bicep \
+            --parameters resourceGroupName="$RESOURCE_GROUP" \
+              deploymentLocation="$AZURE_LOCATION" \
+              environmentName="$ENVIRONMENT_NAME" \
+              owner="$OWNER" costCenter="$COST_CENTER"
+          az deployment sub what-if \
+            --location "$AZURE_LOCATION" \
+            --template-file infra/resource-group.bicep \
+            --parameters resourceGroupName="$RESOURCE_GROUP" \
+              deploymentLocation="$AZURE_LOCATION" \
+              environmentName="$ENVIRONMENT_NAME" \
+              owner="$OWNER" costCenter="$COST_CENTER"
+      - name: Deploy the resource group
+        run: |
+          az deployment sub create \
+            --name simplemcpclient-resource-group \
+            --location "$AZURE_LOCATION" \
+            --template-file infra/resource-group.bicep \
+            --parameters resourceGroupName="$RESOURCE_GROUP" \
+              deploymentLocation="$AZURE_LOCATION" \
+              environmentName="$ENVIRONMENT_NAME" \
+              owner="$OWNER" costCenter="$COST_CENTER"
+      - name: Validate and preview infrastructure
+        run: |
+          az deployment group validate \
+            --resource-group "$RESOURCE_GROUP" \
+            --template-file infra/main.bicep \
+            --parameters infra/main.bicepparam \
+              deploymentLocation="$AZURE_LOCATION" \
+              environmentName="$ENVIRONMENT_NAME" \
+              owner="$OWNER" costCenter="$COST_CENTER" \
+              mcpAllowedHosts="$MCP_ALLOWED_HOSTS" \
+              webAuthToken="$WEB_AUTH_TOKEN" \
+              deployApplication=false
+          az deployment group what-if \
+            --resource-group "$RESOURCE_GROUP" \
+            --template-file infra/main.bicep \
+            --parameters infra/main.bicepparam \
+              deploymentLocation="$AZURE_LOCATION" \
+              environmentName="$ENVIRONMENT_NAME" \
+              owner="$OWNER" costCenter="$COST_CENTER" \
+              mcpAllowedHosts="$MCP_ALLOWED_HOSTS" \
+              webAuthToken="$WEB_AUTH_TOKEN" \
+              deployApplication=false
+      - name: Deploy infrastructure
+        run: |
+          az deployment group create \
+            --name simplemcpclient-infrastructure \
+            --resource-group "$RESOURCE_GROUP" \
+            --template-file infra/main.bicep \
+            --parameters infra/main.bicepparam \
+              deploymentLocation="$AZURE_LOCATION" \
+              environmentName="$ENVIRONMENT_NAME" \
+              owner="$OWNER" costCenter="$COST_CENTER" \
+              mcpAllowedHosts="$MCP_ALLOWED_HOSTS" \
+              webAuthToken="$WEB_AUTH_TOKEN" \
+              deployApplication=false
+      - name: Build and publish the web image
+        id: image
+        run: |
+          registry_name="$(az deployment group show \
+            --name simplemcpclient-infrastructure \
+            --resource-group "$RESOURCE_GROUP" \
+            --query properties.outputs.registryName.value --output tsv)"
+          registry_server="$(az deployment group show \
+            --name simplemcpclient-infrastructure \
+            --resource-group "$RESOURCE_GROUP" \
+            --query properties.outputs.registryLoginServer.value --output tsv)"
+          image="$registry_server/simplemcpclient:$IMAGE_TAG"
+          az acr build --registry "$registry_name" --image "simplemcpclient:$IMAGE_TAG" .
+          echo "image=$image" >> "$GITHUB_OUTPUT"
+      - name: Validate and preview application deployment
+        env:
+          IMAGE: ${{ steps.image.outputs.image }}
+        run: |
+          az deployment group validate \
+            --resource-group "$RESOURCE_GROUP" \
+            --template-file infra/main.bicep \
+            --parameters infra/main.bicepparam \
+              deploymentLocation="$AZURE_LOCATION" \
+              environmentName="$ENVIRONMENT_NAME" \
+              owner="$OWNER" costCenter="$COST_CENTER" \
+              mcpAllowedHosts="$MCP_ALLOWED_HOSTS" \
+              webAuthToken="$WEB_AUTH_TOKEN" \
+              image="$IMAGE" deployApplication=true
+          az deployment group what-if \
+            --resource-group "$RESOURCE_GROUP" \
+            --template-file infra/main.bicep \
+            --parameters infra/main.bicepparam \
+              deploymentLocation="$AZURE_LOCATION" \
+              environmentName="$ENVIRONMENT_NAME" \
+              owner="$OWNER" costCenter="$COST_CENTER" \
+              mcpAllowedHosts="$MCP_ALLOWED_HOSTS" \
+              webAuthToken="$WEB_AUTH_TOKEN" \
+              image="$IMAGE" deployApplication=true
+      - name: Deploy the web application
+        env:
+          IMAGE: ${{ steps.image.outputs.image }}
+        run: |
+          az deployment group create \
+            --name simplemcpclient-application \
+            --resource-group "$RESOURCE_GROUP" \
+            --template-file infra/main.bicep \
+            --parameters infra/main.bicepparam \
+              deploymentLocation="$AZURE_LOCATION" \
+              environmentName="$ENVIRONMENT_NAME" \
+              owner="$OWNER" costCenter="$COST_CENTER" \
+              mcpAllowedHosts="$MCP_ALLOWED_HOSTS" \
+              webAuthToken="$WEB_AUTH_TOKEN" \
+              image="$IMAGE" deployApplication=true
+      - name: Report application URL
+        run: |
+          app_name="ca-simplemcpclient-$ENVIRONMENT_NAME"
+          host="$(az containerapp show \
+            --name "$app_name" --resource-group "$RESOURCE_GROUP" \
+            --query properties.configuration.ingress.fqdn --output tsv)"
+          echo "Deployed Simple MCP Client to https://$host"

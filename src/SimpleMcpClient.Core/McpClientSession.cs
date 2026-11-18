@@ -9,7 +9,7 @@ namespace SimpleMcpClient.Core;
 
 public sealed class McpClientSession : IAsyncDisposable
 {
-    internal const string ProtocolVersion = "2025-11-25";
+    internal const string ProtocolVersion = "2026-07-28";
     private readonly IMcpTransport _transport;
     private int _requestId;
 
@@ -23,6 +23,13 @@ public sealed class McpClientSession : IAsyncDisposable
         CancellationToken cancellationToken = default)
     {
         await McpEndpointValidator.ValidateAsync(endpoint, allowPrivateNetwork, allowedHosts, cancellationToken);
+        if (bearerToken is { Length: > 4096 } ||
+            bearerToken?.Any(character =>
+                !char.IsAsciiLetterOrDigit(character) && !"-._~+/=".Contains(character)) == true)
+        {
+            throw new ArgumentException("The bearer token contains invalid characters or exceeds 4096 characters.");
+        }
+
         var client = new McpClientSession(new HttpMcpTransport(endpoint, bearerToken));
         try
         {
@@ -258,10 +265,38 @@ internal sealed class HttpMcpTransport : IMcpTransport
         return parsed;
     }
 
-    public ValueTask DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
+        try
+        {
+            if (_sessionId is not null)
+            {
+                using var request = new HttpRequestMessage(HttpMethod.Delete, _endpoint);
+                if (_bearerToken is not null)
+                {
+                    request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue(
+                        "Bearer",
+                        _bearerToken);
+                }
+
+                request.Headers.TryAddWithoutValidation("MCP-Session-Id", _sessionId);
+                if (_protocolVersion is not null)
+                {
+                    request.Headers.TryAddWithoutValidation("MCP-Protocol-Version", _protocolVersion);
+                }
+
+                using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+                using var response = await _httpClient.SendAsync(request, timeout.Token);
+            }
+        }
+        catch (HttpRequestException)
+        {
+        }
+        catch (OperationCanceledException)
+        {
+        }
+
         _httpClient.Dispose();
-        return ValueTask.CompletedTask;
     }
 
     private static string GetEventData(string body)
@@ -358,16 +393,16 @@ public static class McpEndpointValidator
             return;
         }
 
+        if (endpoint.Scheme != Uri.UriSchemeHttps)
+        {
+            throw new ArgumentException("HTTPS is required for MCP endpoints outside local development.");
+        }
+
         var permittedHosts = (allowedHosts ?? string.Empty)
             .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         if (permittedHosts.Contains(endpoint.Host, StringComparer.OrdinalIgnoreCase))
         {
             return;
-        }
-
-        if (endpoint.Scheme != Uri.UriSchemeHttps)
-        {
-            throw new ArgumentException("HTTPS is required for MCP endpoints outside local development.");
         }
 
         throw new ArgumentException("This MCP host is not allowed. Add it to MCP_ALLOWED_HOSTS to permit access.");

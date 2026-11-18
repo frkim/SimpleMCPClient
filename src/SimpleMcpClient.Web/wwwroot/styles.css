@@ -72,7 +72,7 @@ h1 span { color: var(--blue); }
 .connect-heading p { margin: 0; color: var(--muted); font-size: 12px; }
 .state-badge { margin-left: auto; padding: 6px 9px; color: var(--muted); background: var(--surface-soft); border: 1px solid var(--line); border-radius: 6px; font-family: "DM Mono", monospace; font-size: 9px; letter-spacing: .5px; }
 .state-badge.connected { color: var(--green); background: color-mix(in srgb, var(--green) 8%, var(--surface)); border-color: color-mix(in srgb, var(--green) 20%, var(--line)); }
-.connect-form { display: grid; grid-template-columns: minmax(230px, 1.5fr) minmax(190px, 1fr) auto; align-items: end; gap: 12px; margin-top: 21px; }
+.connect-form { display: grid; grid-template-columns: minmax(190px, 1.5fr) minmax(180px, 1fr) minmax(180px, 1fr) auto; align-items: end; gap: 12px; margin-top: 21px; }
 .connect-form label, .action-form label { display: block; color: var(--muted); font-family: "DM Mono", monospace; font-size: 9px; letter-spacing: .7px; }
 .connect-form small, .action-form small { margin-left: 5px; color: #a2a8b7; font-size: 8px; }
 .input-wrap { position: relative; }

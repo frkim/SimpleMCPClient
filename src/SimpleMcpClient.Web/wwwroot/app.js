@@ -13,7 +13,7 @@ const state = {
 };
 
 const elements = Object.fromEntries([
-  "connect-form", "endpoint", "token", "connect-button", "connection-state", "notice", "workspace",
+  "connect-form", "endpoint", "token", "web-auth-token", "connect-button", "connection-state", "notice", "workspace",
   "disconnect-button", "search", "tools-body", "resources-list", "prompts-list", "result-summary",
   "page-label", "previous-page", "next-page", "action-panel", "action-title", "action-description",
   "arguments-input", "execute-button", "output-panel", "output-content", "tools-count", "resources-count",
@@ -71,6 +71,7 @@ document.getElementById("disconnect-button").addEventListener("click", () => {
   state.selected = null;
   elements.endpoint.value = "";
   elements.token.value = "";
+  elements["web-auth-token"].value = "";
   elements["connection-state"].textContent = "NOT CONNECTED";
   elements["connection-state"].classList.remove("connected");
   elements.workspace.classList.add("hidden");
@@ -119,7 +120,12 @@ elements["execute-button"].addEventListener("click", runSelected);
 async function api(path, body = {}) {
   const response = await fetch(path, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      ...(elements["web-auth-token"].value
+        ? { Authorization: "Bearer " + elements["web-auth-token"].value }
+        : {})
+    },
     body: JSON.stringify({
       endpoint: state.endpoint,
       bearerToken: state.bearerToken || null,

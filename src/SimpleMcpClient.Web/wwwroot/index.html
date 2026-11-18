@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light dark">
+  <link rel="icon" href="data:,">
   <title>Simple MCP Client</title>
   <link rel="stylesheet" href="/styles.css">
   <script src="/app.js" defer></script>
@@ -47,6 +48,10 @@
           <span id="connection-state" class="state-badge">NOT CONNECTED</span>
         </div>
         <form id="connect-form" class="connect-form">
+          <label class="token-field">
+            <span>APP ACCESS TOKEN <small>DEPLOYMENT</small></span>
+            <input id="web-auth-token" type="password" placeholder="Required for hosted deployments" autocomplete="off">
+          </label>
           <label class="endpoint-field">
             <span>SERVER ENDPOINT</span>
             <div class="input-wrap">
