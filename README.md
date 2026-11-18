@@ -41,7 +41,7 @@ ASPNETCORE_ENVIRONMENT=Development dotnet run --project src/SimpleMcpClient.Web
 
 Open [http://localhost:8080](http://localhost:8080). The sample server endpoint is `http://localhost:5005/mcp`.
 
-The web app uses the public NuGet feed in this repository because CI and deployment run on GitHub-hosted runners, not Microsoft-managed devices. On a company-managed device, configure the Microsoft-protected NuGet feed described in the [package-feed standard](https://github.com/frkim/ai-coding-standards/blob/main/standards/development/package-feeds.md).
+The repository's `NuGet.config` uses only the [Microsoft-protected NuGet feed](https://packagefeedproxy.microsoft.io/nuget/v3/index.json) for all builds, including local, Docker, GitHub Actions, and Azure Container Registry builds. Each build environment must be able to access the feed. If a package is unavailable, follow the approved CFS exception process instead of switching sources. See the [package-feed standard](https://github.com/frkim/ai-coding-standards/blob/main/standards/development/package-feeds.md).
 
 ## CLI
 
@@ -92,7 +92,7 @@ The container runs as the non-root .NET `app` user. Set `MCP_ALLOWED_HOSTS` to a
 
 ## Deploy to Azure Container Apps
 
-The `deploy` workflow provisions a Consumption ACA environment, a Basic Azure Container Registry, a user-assigned managed identity, Log Analytics, and Application Insights. The identity is granted `AcrPull`; the app scales from zero to two replicas and exposes liveness/readiness probes. The CI workflow lints and compiles Bicep on every pull request. Deployments run from `main` or by manual dispatch and use the `production` GitHub environment.
+The `deploy` job provisions a Consumption ACA environment, a Basic Azure Container Registry, a user-assigned managed identity, Log Analytics, and Application Insights. The identity is granted `AcrPull`; the app scales from zero to two replicas and exposes liveness/readiness probes. The CI workflow lints and compiles Bicep on every pull request. Deployments run from `main` or by manual dispatch and use the `production` GitHub environment. To deploy a non-main ref, select it when manually running the workflow and explicitly enable `deploy_from_ref`.
 
 Configure these GitHub Actions settings:
 
@@ -102,13 +102,15 @@ Configure these GitHub Actions settings:
 | `WEB_AUTH_TOKEN` | Secret | Strong random token required to access the hosted web API |
 | `AZURE_RESOURCE_GROUP` | Variable | Resource group for the app, for example `rg-simplemcpclient-prod-eastus` |
 | `AZURE_LOCATION` | Variable | Azure region, for example `eastus` |
+| `AZURE_SUBSCRIPTION_ID` | Variable | Optional expected subscription ID; configure together with `AZURE_TENANT_ID` |
+| `AZURE_TENANT_ID` | Variable | Optional expected tenant ID; configure together with `AZURE_SUBSCRIPTION_ID` |
 | `AZURE_OWNER` | Variable | Workload owner tag |
 | `AZURE_COST_CENTER` | Variable | Cost-center tag |
 | `MCP_ALLOWED_HOSTS` | Variable | Comma-separated MCP host allowlist; configure before enabling user connections |
 
-Enter the `WEB_AUTH_TOKEN` value in the app's **App access token** field when connecting. Use a strong random value and share it only with authorized users. Grant the deployment service principal permissions to create the resource group, deploy its resources and perform the ACR build. Configure required reviewers on the `production` GitHub environment. Never commit the service-principal JSON or put it in a repository variable.
+Enter the `WEB_AUTH_TOKEN` value in the app's **App access token** field when connecting. Use a strong random value and share it only with authorized users. When the expected subscription and tenant are configured, the workflow checks them against the credentials before provisioning. Grant the deployment service principal permissions to create the resource group, deploy its resources, assign the `AcrPull` role, and perform the ACR build. Configure required reviewers and branch restrictions on the `production` GitHub environment. Never commit the service-principal JSON or put it in a repository variable.
 
-The Bicep template is in `infra/main.bicep`; `infra/main.bicepparam` is a development parameter file. Manual deployments must pass a secure `webAuthToken` parameter and a non-empty `mcpAllowedHosts` value. The deployment workflow first creates shared infrastructure, builds the image in ACR, validates and previews the app, then deploys it.
+The Bicep template is in `infra/main.bicep`; `infra/main.bicepparam` is a development parameter file that reads `WEB_AUTH_TOKEN` from the environment. Manual deployments must provide that secret and a non-empty `mcpAllowedHosts` value. Do not write compiled parameter files containing the token to disk. The deployment workflow first creates shared infrastructure, builds the image in ACR, validates and previews the app, then deploys it.
 
 ## Repository standards
 

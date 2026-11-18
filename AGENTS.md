@@ -9,7 +9,7 @@ This repository provides a single-process ASP.NET Core web client, a .NET CLI, a
 
 ## Setup and commands
 
-Use the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0). Configure the package feed appropriate for the build environment: this repository uses NuGet.org for GitHub-hosted runners; Microsoft-managed devices should use the protected feed in the [package-feed standard](https://github.com/frkim/ai-coding-standards/blob/main/standards/development/package-feeds.md).
+Use the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0). The repository's `NuGet.config` uses the Microsoft-protected feed for all builds, including Docker and GitHub Actions; see the [package-feed standard](https://github.com/frkim/ai-coding-standards/blob/main/standards/development/package-feeds.md).
 
 | Task | Command |
 | --- | --- |
@@ -37,6 +37,6 @@ infra/                          Azure Container Apps Bicep
 - Require the exact `MCP_ALLOWED_HOSTS` allowlist for production web requests; never weaken endpoint validation to make a connection work.
 - Do not log bearer tokens or MCP payloads. Return a correlation ID with actionable errors.
 - Keep Azure secrets in GitHub Actions secrets and workload registry pulls on managed identity.
-- Keep dependencies pinned in NuGet lock files; use the protected feed on Microsoft-managed devices.
+- Keep dependencies pinned in NuGet lock files; use the repository's protected feed for all builds.
 - Update this README when commands, security requirements, or deployment behavior change.
 - Follow the [ai-coding-standards development](https://github.com/frkim/ai-coding-standards/blob/main/standards/development/development.md), [Azure](https://github.com/frkim/ai-coding-standards/blob/main/standards/azure/azure.md), [GitHub](https://github.com/frkim/ai-coding-standards/blob/main/standards/github/github.md), and [security](https://github.com/frkim/ai-coding-standards/blob/main/standards/security/security.md) standards.

@@ -123,8 +123,6 @@ resource managedEnvironment 'Microsoft.App/managedEnvironments@2026-07-01' = {
       {
         name: 'Consumption'
         workloadProfileType: 'Consumption'
-        minimumCount: 0
-        maximumCount: 2
       }
     ]
   }

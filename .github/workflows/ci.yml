@@ -5,6 +5,11 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      deploy_from_ref:
+        description: Deploy the selected non-main ref to production
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -32,9 +37,13 @@ jobs:
       - run: az bicep lint --file infra/main.bicep
       - run: az bicep build --file infra/resource-group.bicep --stdout > /dev/null
       - run: az bicep build --file infra/main.bicep --stdout > /dev/null
+      - name: Validate Bicep parameters
+        env:
+          WEB_AUTH_TOKEN: validation-placeholder
+        run: az bicep build-params --file infra/main.bicepparam --stdout > /dev/null
 
   deploy:
-    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch' && (github.ref == 'refs/heads/main' || inputs.deploy_from_ref))
     needs: build
     environment: production
     runs-on: ubuntu-latest
@@ -46,6 +55,8 @@ jobs:
     env:
       RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
       AZURE_LOCATION: ${{ vars.AZURE_LOCATION }}
+      AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
       OWNER: ${{ vars.AZURE_OWNER }}
       COST_CENTER: ${{ vars.AZURE_COST_CENTER }}
       MCP_ALLOWED_HOSTS: ${{ vars.MCP_ALLOWED_HOSTS }}
@@ -65,6 +76,16 @@ jobs:
               exit 1
             fi
           done
+          if [ -n "$AZURE_SUBSCRIPTION_ID" ] || [ -n "$AZURE_TENANT_ID" ]; then
+            account_id="$(az account show --query id --output tsv)"
+            tenant_id="$(az account show --query tenantId --output tsv)"
+            if [ "$account_id" != "$AZURE_SUBSCRIPTION_ID" ] || [ "$tenant_id" != "$AZURE_TENANT_ID" ]; then
+              echo "::error::Azure credentials do not match the configured subscription and tenant."
+              exit 1
+            fi
+          else
+            echo "::notice::Using the subscription and tenant from Azure credentials."
+          fi
       - name: Validate and preview the resource group
         run: |
           az deployment sub validate \
@@ -126,6 +147,27 @@ jobs:
               mcpAllowedHosts="$MCP_ALLOWED_HOSTS" \
               webAuthToken="$WEB_AUTH_TOKEN" \
               deployApplication=false
+      - name: Wait for registry pull role
+        run: |
+          registry_name="$(az deployment group show \
+            --name simplemcpclient-infrastructure \
+            --resource-group "$RESOURCE_GROUP" \
+            --query properties.outputs.registryName.value --output tsv)"
+          registry_id="$(az acr show --name "$registry_name" --query id --output tsv)"
+          principal_id="$(az identity show --name "id-simplemcpclient-$ENVIRONMENT_NAME" \
+            --resource-group "$RESOURCE_GROUP" --query principalId --output tsv)"
+          for attempt in {1..10}; do
+            role="$(az role assignment list --scope "$registry_id" --assignee-object-id "$principal_id" \
+              --query "[?roleDefinitionName=='AcrPull'].roleDefinitionName" --output tsv)"
+            if [ "$role" = "AcrPull" ]; then
+              exit 0
+            fi
+            if [ "$attempt" -lt 10 ]; then
+              sleep 30
+            fi
+          done
+          echo "::error::The registry pull role did not become visible for the workload identity."
+          exit 1
       - name: Build and publish the web image
         id: image
         run: |
