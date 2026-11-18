@@ -1,0 +1,13 @@
+<Solution>
+  <Folder Name="/samples/">
+    <Project Path="samples/SimpleMcpClient.SampleServer/SimpleMcpClient.SampleServer.csproj" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/SimpleMcpClient.Cli/SimpleMcpClient.Cli.csproj" />
+    <Project Path="src/SimpleMcpClient.Core/SimpleMcpClient.Core.csproj" />
+    <Project Path="src/SimpleMcpClient.Web/SimpleMcpClient.Web.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/SimpleMcpClient.SmokeTests/SimpleMcpClient.SmokeTests.csproj" />
+  </Folder>
+</Solution>
